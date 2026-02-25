@@ -314,7 +314,6 @@
           </div>
 
           <div class="btnRow" style="margin-top:14px;">
-            <!-- Fallback onclicks are intentional -->
             <button id="btnNational" type="button" onclick="window.SingulaIAM.verifyNational()">
               Verify National ID (Demo)
             </button>
@@ -335,6 +334,7 @@
     <script>
       const SUPABASE_URL = "https://pjlmwqwltzoarjmaywah.supabase.co";
       const SUPABASE_ANON_KEY = "sb_publishable_oQcaTpbpkvUxbgvWIzFbPg_9NDZB4-y";
+      const PROJECT_REF = "pjlmwqwltzoarjmaywah"; // used to clear localStorage auth token
 
       const el = (id) => document.getElementById(id);
 
@@ -369,6 +369,34 @@
         return `<span class="${cls}"><span class="bDot" aria-hidden="true"></span>${tier}</span>`;
       }
 
+      function clearSupabaseAuthStorage() {
+        // Supabase auth token key typically looks like: sb-<project-ref>-auth-token
+        const exactKey = `sb-${PROJECT_REF}-auth-token`;
+
+        try {
+          localStorage.removeItem(exactKey);
+          sessionStorage.removeItem(exactKey);
+
+          // Extra safety: remove any keys for this project ref
+          const keys = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.includes(PROJECT_REF) && k.startsWith("sb-")) keys.push(k);
+          }
+          keys.forEach((k) => localStorage.removeItem(k));
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      function withTimeout(promise, ms, timeoutMessage) {
+        let t;
+        const timeout = new Promise((_, reject) => {
+          t = setTimeout(() => reject(new Error(timeoutMessage)), ms);
+        });
+        return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
+      }
+
       let supabase;
       try {
         if (!window.supabase || typeof window.supabase.createClient !== "function") {
@@ -376,12 +404,10 @@
         }
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       } catch (e) {
-        // If this fails you won't get far, so show it loudly
         alert("Startup error: " + e.message);
       }
 
       async function ensureProfileRow(user) {
-        // Try read profile row; if table/policies missing we will warn (but app still runs)
         const { data: existing, error: fetchErr } = await supabase
           .from("user_profiles")
           .select("id,tier")
@@ -410,7 +436,6 @@
           return { tier: defaultTier, warn: null };
         }
 
-        // Promote Email -> Social automatically if they logged in with a social provider
         if (defaultTier === "Social" && existing.tier === "Email") {
           const { error: updErr2 } = await supabase
             .from("user_profiles")
@@ -464,22 +489,45 @@
         }
       }
 
-      // Expose actions globally (so onclick always works)
       window.SingulaIAM = {
         logout: async () => {
+          const logoutBtn = el("btnLogout");
+          const nationalBtn = el("btnNational");
           try {
+            logoutBtn.disabled = true;
+            nationalBtn.disabled = true;
+
             showMsg(el("acctMsg"), "Signing out…", "info");
-            await supabase.auth.signOut();
-            // Hard refresh guarantees the UI resets and clears cached state
-            window.location.href = window.location.origin;
+
+            // Try a clean local sign-out, but don’t hang forever
+            await withTimeout(
+              supabase.auth.signOut({ scope: "local" }),
+              2500,
+              "Sign out timed out — applying local fallback."
+            );
+
+            // Safety: remove auth token storage keys
+            clearSupabaseAuthStorage();
+
+            // Immediately switch UI (so it visibly logs out even before reload)
+            setView(false);
+
+            // Force reload to ensure fresh state (cache-buster)
+            window.location.href = `${window.location.origin}/?logged_out=1&ts=${Date.now()}`;
           } catch (e) {
-            showMsg(el("acctMsg"), "Logout failed: " + e.message, "err");
+            // Even if signOut fails, we still hard-clear local storage and reload
+            clearSupabaseAuthStorage();
+            setView(false);
+            window.location.href = `${window.location.origin}/?logged_out=1&ts=${Date.now()}`;
+          } finally {
+            // In case reload is blocked for some reason
+            logoutBtn.disabled = false;
+            nationalBtn.disabled = false;
           }
         },
 
         verifyNational: async () => {
           try {
-            // Give immediate visible feedback
             el("tierBadgeWrap").innerHTML = tierBadge("National ID");
             showMsg(el("acctMsg"), "Verifying National ID (demo)…", "info");
 
@@ -490,7 +538,6 @@
               return;
             }
 
-            // Try to persist tier in user_profiles (requires table + RLS policies)
             const { error } = await supabase
               .from("user_profiles")
               .upsert({ id: user.id, tier: "National ID" }, { onConflict: "id" });
@@ -511,7 +558,7 @@
         }
       };
 
-      // Attach handlers as well (belt + braces)
+      // Auth screen handlers
       el("btnSignup").addEventListener("click", async () => {
         hideMsg(el("authMsg"));
         const email = el("email").value.trim();
@@ -561,13 +608,22 @@
         if (error) showMsg(el("authMsg"), error.message, "err");
       });
 
-      // Also attach to the buttons directly
+      // Ensure clicks always work
       el("btnLogout").addEventListener("click", window.SingulaIAM.logout);
       el("btnNational").addEventListener("click", window.SingulaIAM.verifyNational);
 
+      // Keep UI synced to auth changes
       supabase.auth.onAuthStateChange(async () => {
         await loadAccount();
       });
+
+      // If user just logged out, ensure we start on login screen
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("logged_out") === "1") {
+          setView(false);
+        }
+      } catch (_) {}
 
       loadAccount();
     </script>
