@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Singula IAM Demo</title>
+
+    <!-- Supabase JS (UMD) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+      :root{
+        --bg:#0b1220;
+        --panel:#0f1b33;
+        --panel2:#0c1730;
+        --text:#e7eefc;
+        --muted:#9ab0d6;
+        --border:rgba(255,255,255,.10);
+        --shadow: 0 18px 50px rgba(0,0,0,.55);
+        --orange:#ff6a00;
+        --orange2:#ff7f2a;
+        --green:#22c55e;
+        --red:#ef4444;
+      }
+
+      *{ box-sizing:border-box; }
+      body{
+        margin:0;
+        min-height:100vh;
+        color:var(--text);
+        background:
+          radial-gradient(1200px 600px at 15% 15%, rgba(255,106,0,.20), transparent 55%),
+          radial-gradient(900px 500px at 85% 20%, rgba(34,197,94,.12), transparent 55%),
+          linear-gradient(180deg, #070d18 0%, var(--bg) 45%, #070d18 100%);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:28px;
+      }
+
+      .wrap{
+        width:min(980px, 100%);
+        display:grid;
+        grid-template-columns: 1.05fr .95fr;
+        gap:22px;
+      }
+
+      @media (max-width: 880px){
+        .wrap{ grid-template-columns:1fr; }
+      }
+
+      .brand{
+        background: linear-gradient(180deg, rgba(255,106,0,.14), rgba(15,27,51,.0));
+        border:1px solid var(--border);
+        border-radius:18px;
+        box-shadow: var(--shadow);
+        padding:28px;
+        position:relative;
+        overflow:hidden;
+      }
+
+      .brand:before{
+        content:"";
+        position:absolute;
+        inset:-2px;
+        background: radial-gradient(700px 280px at 20% 0%, rgba(255,106,0,.25), transparent 60%);
+        pointer-events:none;
+      }
+
+      .logoRow{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        position:relative;
+      }
+
+      .mark{
+        width:38px; height:38px;
+        border-radius:12px;
+        background: linear-gradient(135deg, var(--orange), var(--orange2));
+        box-shadow: 0 10px 25px rgba(255,106,0,.25);
+      }
+
+      .brand h1{
+        margin:0;
+        font-size:24px;
+        letter-spacing:.2px;
+      }
+      .brand h1 span{ color:var(--orange); }
+
+      .sub{
+        margin:10px 0 0 0;
+        color:var(--muted);
+        line-height:1.55;
+        position:relative;
+      }
+
+      .pillRow{
+        display:flex;
+        flex-wrap:wrap;
+        gap:10px;
+        margin-top:18px;
+        position:relative;
+      }
+      .pill{
+        border:1px solid var(--border);
+        background: rgba(12,23,48,.55);
+        border-radius:999px;
+        padding:8px 10px;
+        font-size:12px;
+        color:var(--muted);
+        display:flex;
+        align-items:center;
+        gap:8px;
+      }
+      .dot{
+        width:8px; height:8px; border-radius:50%;
+        background: var(--orange);
+        box-shadow: 0 0 0 3px rgba(255,106,0,.18);
+      }
+
+      .card{
+        border:1px solid var(--border);
+        background: linear-gradient(180deg, rgba(15,27,51,.92), rgba(12,23,48,.72));
+        border-radius:18px;
+        box-shadow: var(--shadow);
+        padding:22px;
+      }
+
+      .card h2{
+        margin:0 0 12px 0;
+        font-size:18px;
+        letter-spacing:.2px;
+      }
+
+      .grid{
+        display:grid;
+        gap:10px;
+      }
+
+      label{
+        font-size:12px;
+        color:var(--muted);
+      }
+
+      input{
+        width:100%;
+        padding:12px 12px;
+        border-radius:12px;
+        border:1px solid rgba(255,255,255,.14);
+        background: rgba(8,14,28,.55);
+        color:var(--text);
+        outline:none;
+      }
+      input:focus{
+        border-color: rgba(255,106,0,.55);
+        box-shadow: 0 0 0 4px rgba(255,106,0,.12);
+      }
+
+      .btnRow{
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin-top:8px;
+      }
+
+      button{
+        border:0;
+        border-radius:12px;
+        padding:11px 12px;
+        font-weight:700;
+        cursor:pointer;
+        color:white;
+        background: linear-gradient(135deg, var(--orange), var(--orange2));
+        box-shadow: 0 10px 24px rgba(255,106,0,.20);
+        flex:1;
+        min-width: 150px;
+      }
+
+      button.secondary{
+        background: rgba(255,255,255,.06);
+        border:1px solid rgba(255,255,255,.12);
+        box-shadow:none;
+      }
+      button.secondary:hover{ border-color: rgba(255,106,0,.35); }
+
+      button.ghost{
+        background: transparent;
+        border:1px dashed rgba(255,255,255,.18);
+        box-shadow:none;
+      }
+      button.ghost:hover{ border-color: rgba(255,106,0,.45); }
+
+      .msg{
+        margin-top:12px;
+        padding:10px 12px;
+        border-radius:12px;
+        border:1px solid rgba(255,255,255,.12);
+        background: rgba(8,14,28,.45);
+        color: var(--muted);
+        font-size:13px;
+        line-height:1.5;
+      }
+
+      .msg.ok{ border-color: rgba(34,197,94,.35); color: #bff7d0; }
+      .msg.err{ border-color: rgba(239,68,68,.35); color: #ffd2d2; }
+
+      .hidden{ display:none !important; }
+
+      .kv{
+        display:grid;
+        gap:10px;
+        margin-top:10px;
+      }
+      .kvRow{
+        display:grid;
+        grid-template-columns: 150px 1fr;
+        gap:10px;
+        align-items:start;
+        padding:10px 12px;
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,.10);
+        background: rgba(8,14,28,.35);
+      }
+      @media (max-width: 520px){
+        .kvRow{ grid-template-columns:1fr; }
+      }
+      .k{
+        color:var(--muted);
+        font-size:12px;
+        padding-top:3px;
+      }
+      .v{
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size:13px;
+        word-break: break-all;
+      }
+
+      .badge{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:7px 10px;
+        border-radius:999px;
+        font-weight:800;
+        font-size:12px;
+        border:1px solid rgba(255,255,255,.14);
+        background: rgba(255,255,255,.06);
+      }
+      .badge .bDot{
+        width:8px; height:8px; border-radius:50%;
+        background: var(--orange);
+        box-shadow: 0 0 0 3px rgba(255,106,0,.16);
+      }
+      .badge.social .bDot{ background:#60a5fa; box-shadow:0 0 0 3px rgba(96,165,250,.18); }
+      .badge.national .bDot{ background:var(--green); box-shadow:0 0 0 3px rgba(34,197,94,.18); }
+
+      .footerHint{
+        margin-top:12px;
+        color: rgba(154,176,214,.85);
+        font-size:12px;
+      }
+
+      a{ color: var(--orange); text-decoration:none; }
+      a:hover{ text-decoration:underline; }
+    </style>
+  </head>
+
+  <body>
+    <div class="wrap">
+      <!-- Left: Brand / explanation -->
+      <section class="brand">
+        <div class="logoRow">
+          <div class="mark" aria-hidden="true"></div>
+          <h1><span>Singula</span> IAM Demo</h1>
+        </div>
+
+        <p class="sub">
+          A lightweight, externally accessible IAM demo that supports Email/Password,
+          Social SSO, and a mock “National ID” verification tier — with a stable UUID
+          ready to act as a common customer reference for Singula billing & subscription workflows.
+        </p>
+
+        <div class="pillRow">
+          <div class="pill"><span class="dot"></span> Email / Password</div>
+          <div class="pill"><span class="dot"></span> Google SSO</div>
+          <div class="pill"><span class="dot"></span> National ID (Demo)</div>
+          <div class="pill"><span class="dot"></span> UUID issued on signup</div>
+        </div>
+
+        <div class="footerHint">
+          Tip: If you enable Google in Supabase, users can complete the Social SSO tier with one click.
+        </div>
+      </section>
+
+      <!-- Right: Auth / Account -->
+      <section class="card">
+        <!-- Logged out -->
+        <div id="authView">
+          <h2>Login / Create Account</h2>
+          <div class="grid">
+            <div>
+              <label for="email">Email</label>
+              <input id="email" type="email" autocomplete="email" placeholder="name@company.com" />
+            </div>
+            <div>
+              <label for="password">Password</label>
+              <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+            </div>
+          </div>
+
+          <div class="btnRow">
+            <button id="btnSignup" type="button">Create account</button>
+            <button id="btnLogin" type="button" class="secondary">Login</button>
+          </div>
+
+          <div class="btnRow">
+            <button id="btnGoogle" type="button" class="ghost">Continue with Google</button>
+          </div>
+
+          <div id="authMsg" class="msg hidden"></div>
+        </div>
+
+        <!-- Logged in -->
+        <div id="accountView" class="hidden">
+          <h2>My Account</h2>
+
+          <div id="tierBadgeWrap" style="margin: 6px 0 8px 0;"></div>
+
+          <div class="kv">
+            <div class="kvRow">
+              <div class="k">Username</div>
+              <div class="v" id="vUsername">—</div>
+            </div>
+            <div class="kvRow">
+              <div class="k">Email</div>
+              <div class="v" id="vEmail">—</div>
+            </div>
+            <div class="kvRow">
+              <div class="k">UUID (Singula Ref)</div>
+              <div class="v" id="vUUID">—</div>
+            </div>
+            <div class="kvRow">
+              <div class="k">Auth Provider</div>
+              <div class="v" id="vProvider">—</div>
+            </div>
+          </div>
+
+          <div class="btnRow" style="margin-top:14px;">
+            <button id="btnNational" type="button">Verify National ID (Demo)</button>
+            <button id="btnLogout" type="button" class="secondary">Logout</button>
+          </div>
+
+          <div id="acctMsg" class="msg hidden"></div>
+
+          <div class="footerHint">
+            “Verify National ID (Demo)” upgrades the user’s tier in Supabase. No real ID provider is required.
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      // Supabase configuration (your real values)
+      const SUPABASE_URL = "https://pjlmwqwltzoarjmaywah.supabase.co";
+      const SUPABASE_ANON_KEY = "sb_publishable_oQcaTpbpkvUxbgvWIzFbPg_9NDZB4-y";
+
+      const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      // UI helpers
+      const el = (id) => document.getElementById(id);
+
+      function showMsg(targetEl, text, kind) {
+        targetEl.classList.remove("hidden", "ok", "err");
+        if (kind === "ok") targetEl.classList.add("ok");
+        if (kind === "err") targetEl.classList.add("err");
+        targetEl.textContent = text;
+      }
+      function hideMsg(targetEl) {
+        targetEl.classList.add("hidden");
+        targetEl.textContent = "";
+        targetEl.classList.remove("ok", "err");
+      }
+
+      function setView(isAuthed) {
+        el("authView").classList.toggle("hidden", isAuthed);
+        el("accountView").classList.toggle("hidden", !isAuthed);
+        hideMsg(el("authMsg"));
+        hideMsg(el("acctMsg"));
+      }
+
+      // Determine provider + tier
+      function getProviderFromUser(user) {
+        // Supabase includes providers in identities (most reliable)
+        const identities = user?.identities || [];
+        if (identities.length > 0 && identities[0]?.provider) return identities[0].provider;
+        // Fallbacks
+        return user?.app_metadata?.provider || "email";
+      }
+
+      function tierBadge(tier) {
+        const cls =
+          tier === "Social" ? "badge social" :
+          tier === "National ID" ? "badge national" :
+          "badge";
+
+        const dot = `<span class="bDot" aria-hidden="true"></span>`;
+        return `<span class="${cls}">${dot}${tier}</span>`;
+      }
+
+      // Ensure a user_profiles row exists (and set default tier if missing)
+      async function ensureProfileRow(user) {
+        // Try fetch
+        const { data: existing, error: fetchErr } = await supabase
+          .from("user_profiles")
+          .select("id,tier")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        // If table/policies not ready, we still allow UI to work
+        if (fetchErr) {
+          return { tier: null, warn: fetchErr.message };
+        }
+
+        // Determine default tier based on provider
+        const provider = getProviderFromUser(user);
+        const defaultTier = (provider && provider !== "email") ? "Social" : "Email";
+
+        if (!existing) {
+          const { error: insErr } = await supabase
+            .from("user_profiles")
+            .insert({ id: user.id, tier: defaultTier });
+
+          if (insErr) return { tier: null, warn: insErr.message };
+          return { tier: defaultTier, warn: null };
+        }
+
+        // If existing tier is missing, backfill
+        if (!existing.tier) {
+          const { error: updErr } = await supabase
+            .from("user_profiles")
+            .update({ tier: defaultTier })
+            .eq("id", user.id);
+
+          if (updErr) return { tier: null, warn: updErr.message };
+          return { tier: defaultTier, warn: null };
+        }
+
+        // If user logged in via social and tier is still Email, promote to Social
+        if (defaultTier === "Social" && existing.tier === "Email") {
+          const { error: updErr2 } = await supabase
+            .from("user_profiles")
+            .update({ tier: "Social" })
+            .eq("id", user.id);
+
+          if (!updErr2) return { tier: "Social", warn: null };
+        }
+
+        return { tier: existing.tier, warn: null };
+      }
+
+      async function loadAccount() {
+        const { data: userRes } = await supabase.auth.getUser();
+        const user = userRes?.user;
+
+        if (!user) {
+          setView(false);
+          return;
+        }
+
+        setView(true);
+
+        const provider = getProviderFromUser(user);
+        const username =
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          user.email ||
+          "—";
+
+        el("vUsername").textContent = username;
+        el("vEmail").textContent = user.email || "—";
+        el("vUUID").textContent = user.id || "—";
+        el("vProvider").textContent = provider;
+
+        // Tier is stored in user_profiles (Email/Social/National ID)
+        const profile = await ensureProfileRow(user);
+
+        // Tier fallback if profile table not ready
+        let tier = "Email";
+        if (provider && provider !== "email") tier = "Social";
+        if (profile?.tier) tier = profile.tier;
+
+        el("tierBadgeWrap").innerHTML = tierBadge(tier);
+
+        // If profile table/policy missing, show a helpful (non-blocking) message
+        if (profile?.warn) {
+          showMsg(
+            el("acctMsg"),
+            "Note: 'user_profiles' table or RLS policy is not yet allowing reads/writes. The demo still works, but National ID tier updates won’t persist until the table + policies are set. (" + profile.warn + ")",
+            "err"
+          );
+        } else {
+          hideMsg(el("acctMsg"));
+        }
+      }
+
+      // Actions
+      el("btnSignup").addEventListener("click", async () => {
+        hideMsg(el("authMsg"));
+        const email = el("email").value.trim();
+        const password = el("password").value;
+
+        if (!email || !password) {
+          showMsg(el("authMsg"), "Please enter an email and password.", "err");
+          return;
+        }
+
+        const { error } = await supabase.auth.signUp({ email, password });
+
+        if (error) {
+          showMsg(el("authMsg"), error.message, "err");
+          return;
+        }
+
+        showMsg(
+          el("authMsg"),
+          "Account created. If email confirmation is enabled in Supabase, please check your inbox and confirm before logging in.",
+          "ok"
+        );
+      });
+
+      el("btnLogin").addEventListener("click", async () => {
+        hideMsg(el("authMsg"));
+        const email = el("email").value.trim();
+        const password = el("password").value;
+
+        if (!email || !password) {
+          showMsg(el("authMsg"), "Please enter an email and password.", "err");
+          return;
+        }
+
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (error) {
+          showMsg(el("authMsg"), error.message, "err");
+          return;
+        }
+
+        // loadAccount will run via auth state change, but run immediately too
+        await loadAccount();
+      });
+
+      el("btnGoogle").addEventListener("click", async () => {
+        hideMsg(el("authMsg"));
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            // Supabase will use the configured Site URL / Redirect URLs.
+            // Leaving redirectTo unset makes it “just work” with your Supabase URL config.
+          }
+        });
+
+        if (error) showMsg(el("authMsg"), error.message, "err");
+      });
+
+      el("btnLogout").addEventListener("click", async () => {
+        await supabase.auth.signOut();
+        setView(false);
+      });
+
+      el("btnNational").addEventListener("click", async () => {
+        hideMsg(el("acctMsg"));
+
+        const { data: userRes } = await supabase.auth.getUser();
+        const user = userRes?.user;
+        if (!user) {
+          showMsg(el("acctMsg"), "Session not found. Please login again.", "err");
+          return;
+        }
+
+        // Persist National ID tier
+        const { error } = await supabase
+          .from("user_profiles")
+          .upsert({ id: user.id, tier: "National ID" }, { onConflict: "id" });
+
+        if (error) {
+          showMsg(
+            el("acctMsg"),
+            "Could not save National ID tier. This usually means the 'user_profiles' table or RLS policy isn't set yet. (" + error.message + ")",
+            "err"
+          );
+          return;
+        }
+
+        el("tierBadgeWrap").innerHTML = tierBadge("National ID");
+        showMsg(el("acctMsg"), "National ID verified (demo). Tier upgraded.", "ok");
+      });
+
+      // Keep UI in sync with auth
+      supabase.auth.onAuthStateChange(async (_event, _session) => {
+        await loadAccount();
+      });
+
+      // Initial load
+      loadAccount();
+    </script>
+  </body>
+</html>
