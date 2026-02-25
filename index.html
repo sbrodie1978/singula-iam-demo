@@ -21,6 +21,7 @@
         --orange2:#ff7f2a;
         --green:#22c55e;
         --red:#ef4444;
+        --blue:#60a5fa;
       }
       *{ box-sizing:border-box; }
       body{
@@ -109,6 +110,7 @@
         background: var(--orange);
         box-shadow: 0 0 0 3px rgba(255,106,0,.18);
       }
+
       .card{
         border:1px solid var(--border);
         background: linear-gradient(180deg, rgba(15,27,51,.92), rgba(12,23,48,.72));
@@ -153,6 +155,7 @@
         box-shadow: 0 10px 24px rgba(255,106,0,.20);
         flex:1;
         min-width: 150px;
+        user-select:none;
       }
       button.secondary{
         background: rgba(255,255,255,.06);
@@ -164,6 +167,11 @@
         border:1px dashed rgba(255,255,255,.18);
         box-shadow:none;
       }
+      button:disabled{
+        opacity:.6;
+        cursor:not-allowed;
+      }
+
       .msg{
         margin-top:12px;
         padding:10px 12px;
@@ -173,10 +181,13 @@
         color: var(--muted);
         font-size:13px;
         line-height:1.5;
+        white-space:pre-wrap;
       }
       .msg.ok{ border-color: rgba(34,197,94,.35); color: #bff7d0; }
       .msg.err{ border-color: rgba(239,68,68,.35); color: #ffd2d2; }
+      .msg.info{ border-color: rgba(96,165,250,.35); color: #d7e8ff; }
       .hidden{ display:none !important; }
+
       .kv{
         display:grid;
         gap:10px;
@@ -201,6 +212,7 @@
         font-size:13px;
         word-break: break-all;
       }
+
       .badge{
         display:inline-flex;
         align-items:center;
@@ -212,12 +224,15 @@
         border:1px solid rgba(255,255,255,.14);
         background: rgba(255,255,255,.06);
       }
-      .badge .bDot{ width:8px; height:8px; border-radius:50%; background: var(--orange); box-shadow: 0 0 0 3px rgba(255,106,0,.16); }
-      .badge.social .bDot{ background:#60a5fa; box-shadow:0 0 0 3px rgba(96,165,250,.18); }
+      .badge .bDot{
+        width:8px; height:8px; border-radius:50%;
+        background: var(--orange);
+        box-shadow: 0 0 0 3px rgba(255,106,0,.16);
+      }
+      .badge.social .bDot{ background:var(--blue); box-shadow:0 0 0 3px rgba(96,165,250,.18); }
       .badge.national .bDot{ background:var(--green); box-shadow:0 0 0 3px rgba(34,197,94,.18); }
+
       .footerHint{ margin-top:12px; color: rgba(154,176,214,.85); font-size:12px; }
-      a{ color: var(--orange); text-decoration:none; }
-      a:hover{ text-decoration:underline; }
     </style>
   </head>
 
@@ -243,13 +258,12 @@
         </div>
 
         <div class="footerHint">
-          If the buttons don’t work, you’ll now see an error message here on-screen (usually a Supabase config or URL issue).
+          If any action fails, you’ll see an on-screen message on the right panel.
         </div>
-
-        <div id="bootMsg" class="msg hidden"></div>
       </section>
 
       <section class="card">
+        <!-- Logged out -->
         <div id="authView">
           <h2>Login / Create Account</h2>
           <div class="grid">
@@ -275,6 +289,7 @@
           <div id="authMsg" class="msg hidden"></div>
         </div>
 
+        <!-- Logged in -->
         <div id="accountView" class="hidden">
           <h2>My Account</h2>
           <div id="tierBadgeWrap" style="margin: 6px 0 8px 0;"></div>
@@ -299,8 +314,13 @@
           </div>
 
           <div class="btnRow" style="margin-top:14px;">
-            <button id="btnNational" type="button">Verify National ID (Demo)</button>
-            <button id="btnLogout" type="button" class="secondary">Logout</button>
+            <!-- Fallback onclicks are intentional -->
+            <button id="btnNational" type="button" onclick="window.SingulaIAM.verifyNational()">
+              Verify National ID (Demo)
+            </button>
+            <button id="btnLogout" type="button" class="secondary" onclick="window.SingulaIAM.logout()">
+              Logout
+            </button>
           </div>
 
           <div id="acctMsg" class="msg hidden"></div>
@@ -313,22 +333,22 @@
     </div>
 
     <script>
-      // Your Supabase configuration
       const SUPABASE_URL = "https://pjlmwqwltzoarjmaywah.supabase.co";
       const SUPABASE_ANON_KEY = "sb_publishable_oQcaTpbpkvUxbgvWIzFbPg_9NDZB4-y";
 
       const el = (id) => document.getElementById(id);
 
       function showMsg(targetEl, text, kind) {
-        targetEl.classList.remove("hidden", "ok", "err");
+        targetEl.classList.remove("hidden", "ok", "err", "info");
         if (kind === "ok") targetEl.classList.add("ok");
         if (kind === "err") targetEl.classList.add("err");
+        if (kind === "info") targetEl.classList.add("info");
         targetEl.textContent = text;
       }
       function hideMsg(targetEl) {
         targetEl.classList.add("hidden");
         targetEl.textContent = "";
-        targetEl.classList.remove("ok", "err");
+        targetEl.classList.remove("ok", "err", "info");
       }
       function setView(isAuthed) {
         el("authView").classList.toggle("hidden", isAuthed);
@@ -349,18 +369,19 @@
         return `<span class="${cls}"><span class="bDot" aria-hidden="true"></span>${tier}</span>`;
       }
 
-      // Boot: create client safely + attach handlers
       let supabase;
       try {
         if (!window.supabase || typeof window.supabase.createClient !== "function") {
-          throw new Error("Supabase JS did not load. Check the script tag / CDN.");
+          throw new Error("Supabase JS did not load.");
         }
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       } catch (e) {
-        showMsg(el("bootMsg"), "Startup error: " + e.message, "err");
+        // If this fails you won't get far, so show it loudly
+        alert("Startup error: " + e.message);
       }
 
       async function ensureProfileRow(user) {
+        // Try read profile row; if table/policies missing we will warn (but app still runs)
         const { data: existing, error: fetchErr } = await supabase
           .from("user_profiles")
           .select("id,tier")
@@ -389,6 +410,7 @@
           return { tier: defaultTier, warn: null };
         }
 
+        // Promote Email -> Social automatically if they logged in with a social provider
         if (defaultTier === "Social" && existing.tier === "Email") {
           const { error: updErr2 } = await supabase
             .from("user_profiles")
@@ -401,8 +423,6 @@
       }
 
       async function loadAccount() {
-        if (!supabase) return;
-
         const { data: userRes } = await supabase.auth.getUser();
         const user = userRes?.user;
 
@@ -436,100 +456,120 @@
         if (profile?.warn) {
           showMsg(
             el("acctMsg"),
-            "Note: 'user_profiles' table/policies not ready yet. National ID tier won’t persist until the SQL setup is applied. (" + profile.warn + ")",
-            "err"
+            "National ID persistence not enabled yet.\n\nTo enable it, create the user_profiles table + RLS policies in Supabase SQL Editor.\n\nUnderlying message: " + profile.warn,
+            "info"
           );
         } else {
           hideMsg(el("acctMsg"));
         }
       }
 
-      // Attach handlers
-      (function attach() {
-        if (!supabase) return;
-
-        el("btnSignup").addEventListener("click", async () => {
-          hideMsg(el("authMsg"));
-          const email = el("email").value.trim();
-          const password = el("password").value;
-
-          if (!email || !password) {
-            showMsg(el("authMsg"), "Please enter an email and password.", "err");
-            return;
+      // Expose actions globally (so onclick always works)
+      window.SingulaIAM = {
+        logout: async () => {
+          try {
+            showMsg(el("acctMsg"), "Signing out…", "info");
+            await supabase.auth.signOut();
+            // Hard refresh guarantees the UI resets and clears cached state
+            window.location.href = window.location.origin;
+          } catch (e) {
+            showMsg(el("acctMsg"), "Logout failed: " + e.message, "err");
           }
+        },
 
-          const { error } = await supabase.auth.signUp({ email, password });
+        verifyNational: async () => {
+          try {
+            // Give immediate visible feedback
+            el("tierBadgeWrap").innerHTML = tierBadge("National ID");
+            showMsg(el("acctMsg"), "Verifying National ID (demo)…", "info");
 
-          if (error) {
-            showMsg(el("authMsg"), error.message, "err");
-            return;
+            const { data: userRes } = await supabase.auth.getUser();
+            const user = userRes?.user;
+            if (!user) {
+              showMsg(el("acctMsg"), "Session not found. Please login again.", "err");
+              return;
+            }
+
+            // Try to persist tier in user_profiles (requires table + RLS policies)
+            const { error } = await supabase
+              .from("user_profiles")
+              .upsert({ id: user.id, tier: "National ID" }, { onConflict: "id" });
+
+            if (error) {
+              showMsg(
+                el("acctMsg"),
+                "Tier updated on screen, but could not persist to Supabase yet.\n\nFix: run the user_profiles + RLS SQL in Supabase.\n\nUnderlying error: " + error.message,
+                "err"
+              );
+              return;
+            }
+
+            showMsg(el("acctMsg"), "National ID verified (demo). Tier upgraded and saved.", "ok");
+          } catch (e) {
+            showMsg(el("acctMsg"), "National ID failed: " + e.message, "err");
           }
+        }
+      };
 
-          showMsg(
-            el("authMsg"),
-            "Account created. If email confirmation is enabled in Supabase, check your inbox and confirm before logging in.",
-            "ok"
-          );
-        });
+      // Attach handlers as well (belt + braces)
+      el("btnSignup").addEventListener("click", async () => {
+        hideMsg(el("authMsg"));
+        const email = el("email").value.trim();
+        const password = el("password").value;
 
-        el("btnLogin").addEventListener("click", async () => {
-          hideMsg(el("authMsg"));
-          const email = el("email").value.trim();
-          const password = el("password").value;
+        if (!email || !password) {
+          showMsg(el("authMsg"), "Please enter an email and password.", "err");
+          return;
+        }
 
-          if (!email || !password) {
-            showMsg(el("authMsg"), "Please enter an email and password.", "err");
-            return;
-          }
+        const { error } = await supabase.auth.signUp({ email, password });
 
-          const { error } = await supabase.auth.signInWithPassword({ email, password });
-          if (error) {
-            showMsg(el("authMsg"), error.message, "err");
-            return;
-          }
+        if (error) {
+          showMsg(el("authMsg"), error.message, "err");
+          return;
+        }
 
-          await loadAccount();
-        });
+        showMsg(
+          el("authMsg"),
+          "Account created. If email confirmation is enabled, check your inbox and confirm before logging in.",
+          "ok"
+        );
+      });
 
-        el("btnGoogle").addEventListener("click", async () => {
-          hideMsg(el("authMsg"));
-          const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
-          if (error) showMsg(el("authMsg"), error.message, "err");
-        });
+      el("btnLogin").addEventListener("click", async () => {
+        hideMsg(el("authMsg"));
+        const email = el("email").value.trim();
+        const password = el("password").value;
 
-        el("btnLogout").addEventListener("click", async () => {
-          await supabase.auth.signOut();
-          setView(false);
-        });
+        if (!email || !password) {
+          showMsg(el("authMsg"), "Please enter an email and password.", "err");
+          return;
+        }
 
-        el("btnNational").addEventListener("click", async () => {
-          hideMsg(el("acctMsg"));
-          const { data: userRes } = await supabase.auth.getUser();
-          const user = userRes?.user;
-          if (!user) {
-            showMsg(el("acctMsg"), "Session not found. Please login again.", "err");
-            return;
-          }
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          showMsg(el("authMsg"), error.message, "err");
+          return;
+        }
 
-          const { error } = await supabase
-            .from("user_profiles")
-            .upsert({ id: user.id, tier: "National ID" }, { onConflict: "id" });
+        await loadAccount();
+      });
 
-          if (error) {
-            showMsg(el("acctMsg"), "Could not save National ID tier. (" + error.message + ")", "err");
-            return;
-          }
+      el("btnGoogle").addEventListener("click", async () => {
+        hideMsg(el("authMsg"));
+        const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+        if (error) showMsg(el("authMsg"), error.message, "err");
+      });
 
-          el("tierBadgeWrap").innerHTML = tierBadge("National ID");
-          showMsg(el("acctMsg"), "National ID verified (demo). Tier upgraded.", "ok");
-        });
+      // Also attach to the buttons directly
+      el("btnLogout").addEventListener("click", window.SingulaIAM.logout);
+      el("btnNational").addEventListener("click", window.SingulaIAM.verifyNational);
 
-        supabase.auth.onAuthStateChange(async () => {
-          await loadAccount();
-        });
+      supabase.auth.onAuthStateChange(async () => {
+        await loadAccount();
+      });
 
-        loadAccount();
-      })();
+      loadAccount();
     </script>
   </body>
 </html>
